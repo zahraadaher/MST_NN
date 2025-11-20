@@ -84,11 +84,22 @@ class MuonDataset(Dataset):
         x = np.stack([S, N_log, S_sigma_log], axis=0).astype(np.float32)
 
         # -------- Ground truth density volume --------
-        tgt_path = os.path.join(self.target_dir, name + "_density.npy")
+        tgt_path = os.path.join(self.target_dir, name + "_X0.npy")
         if not os.path.exists(tgt_path):
             raise RuntimeError(f"Ground truth not found: {tgt_path}")
 
         tgt = np.load(tgt_path).astype(np.float32)
+        
+        # Avoid division by 0 in void
+        eps = 1e-9
+        tgt = 1.0 / (tgt + eps)
+        
+        # Scale to [0,1] or global normalization
+        if self.normalize_stats:
+            tgt = tgt / (self.normalize_stats["tgt_max"] + 1e-9)
+        else:
+            tgt = tgt / (tgt.max() + 1e-9)
+            
         tgt = tgt[None, ...]  # add channel dimension: (1, D, D, D)
 
         # -------- Exposure mask (1, D, D, D) --------

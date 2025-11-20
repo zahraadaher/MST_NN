@@ -11,14 +11,14 @@ sys.path.insert(0, os.path.abspath(os.path.join(THIS_DIR, "..")))
 
 from src.poca_reconstruction import POCA
 
-csv_dir    = "/home/ucl/cp3/zdaher/simulation-cultural-heritage/muography-geant4/outputs/boneInConcrete/processed_root"
-target_dir = "/home/ucl/cp3/zdaher/simulation-cultural-heritage/muography-geant4/outputs/boneInConcrete/density_maps"
-out_dir    = "/home/ucl/cp3/zdaher/simulation-cultural-heritage/muography-geant4/outputs/boneInConcrete/poca_voxels"
+csv_dir    = "/nfs/user/zdaher/mst_nn/ironInConcrete/processed_root/"
+target_dir = "/nfs/user/zdaher/mst_nn/ironInConcrete/density_maps/"
+out_dir    = "/nfs/user/zdaher/mst_nn/ironInConcrete/poca_voxels/"
 
-sigma_x=0.1
-sigma_y=0.1
-xyz_min=(-600., -600., -2700.)
-xyz_max=( 600.,  600., -1300.)
+sigma_x=0.1 # mm
+sigma_y=0.1 # mm
+xyz_min=(-600., -600., -2600.) # mm
+xyz_max=( 600.,  600., -1400.) # mm
 
 device= "cuda" if torch.cuda.is_available() else 'cpu'
 
@@ -40,7 +40,7 @@ def precompute_all_poca(
 
     for c in all_csv:
         base = os.path.basename(c).replace("_processed.csv", "")
-        tgt = os.path.join(target_dir, base + "_density.npy")
+        tgt = os.path.join(target_dir, base + "_X0.npy")
         if os.path.exists(tgt):
             pairs.append((c, tgt))
 

@@ -84,7 +84,7 @@ def nll_loss_masked(pred, target, mask, min_sigma=1e-3, sigma_prior_strength=1e-
 
     # clamp log_sigma to avoid numerical blow-up
     log_sigma = torch.clamp(log_sigma, -10.0, 5.0)
-    sigma     = torch.exp(log_sigma) + min_sigma
+    sigma     = torch.exp(log_sigma)# + min_sigma
 
     diff = target - mu
 
@@ -92,7 +92,7 @@ def nll_loss_masked(pred, target, mask, min_sigma=1e-3, sigma_prior_strength=1e-
     nll = 0.5 * torch.log(2 * math.pi * sigma**2) + 0.5 * (diff**2) / (sigma**2)
 
     # apply exposure mask
-    masked_nll = nll * mask
+    masked_nll = nll #* mask
     n_masked   = mask.sum() + 1e-8
     base_loss  = masked_nll.sum() / n_masked
 
