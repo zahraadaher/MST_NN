@@ -4,7 +4,7 @@ import sys
 import torch
 from torch.utils.data import DataLoader
 
-use_wandb = True
+use_wandb = False
 
 if use_wandb:
     import wandb
