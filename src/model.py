@@ -71,7 +71,7 @@ class ProbUNet3D(nn.Module):
             out = up(out)
         return self.final_conv(out)
 
-def nll_loss_masked(pred, target, mask, min_sigma=1e-3, sigma_prior_strength=1e-4):
+def nll_loss_masked(pred, target, mask, min_sigma=1e-1, sigma_prior_strength=1e-4):
     """
     pred:   (B,2,D,D,D) -> [mu, log_sigma]
     target: (B,1,D,D,D)
@@ -85,6 +85,8 @@ def nll_loss_masked(pred, target, mask, min_sigma=1e-3, sigma_prior_strength=1e-
     # clamp log_sigma to avoid numerical blow-up
     log_sigma = torch.clamp(log_sigma, -10.0, 5.0)
     sigma     = torch.exp(log_sigma)# + min_sigma
+    #sigma = torch.clamp(torch.exp(log_sigma), min=min_sigma, max=1.0)
+
 
     diff = target - mu
 
@@ -92,13 +94,13 @@ def nll_loss_masked(pred, target, mask, min_sigma=1e-3, sigma_prior_strength=1e-
     nll = 0.5 * torch.log(2 * math.pi * sigma**2) + 0.5 * (diff**2) / (sigma**2)
 
     # apply exposure mask
-    masked_nll = nll #* mask
+    masked_nll = nll * mask
     n_masked   = mask.sum() + 1e-8
     base_loss  = masked_nll.sum() / n_masked
 
     # optional weak prior: penalize too-large sigma
     # encourages log_sigma ~ 0 (i.e. sigma ~ 1 in normalized units)
-    sigma_prior = sigma_prior_strength * (log_sigma**2).mean()
+    sigma_prior = sigma_prior_strength * (sigma**2).mean()
 
     return base_loss + sigma_prior
 
