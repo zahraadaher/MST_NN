@@ -95,15 +95,21 @@ class MuonDataset(Dataset):
         tgt = 1.0 / (tgt + eps)
         
         # Scale to [0,1] or global normalization
-        if self.normalize_stats:
-            tgt = tgt / (self.normalize_stats["tgt_max"] + 1e-9)
-        else:
-            tgt = tgt / (tgt.max() + 1e-9)
+        # if self.normalize_stats:
+        #     tgt = tgt / (self.normalize_stats["tgt_max"] + 1e-9)
+        # else:
+        #     tgt = tgt / (tgt.max() + 1e-9)
             
         tgt = tgt[None, ...]  # add channel dimension: (1, D, D, D)
 
         # -------- Exposure mask (1, D, D, D) --------
-        mask = (N > 0).astype(np.float32)[None, ...]
+        mask = (N > 0).astype(np.float32)#[None, ...]
+
+        # additional target threshold mask
+        target_mask = (tgt[0] > 0.1).astype(np.float32)  # tgt[0] because tgt has shape (1,D,D,D)
+
+        # Combine masks
+        mask = (mask * target_mask)[None, ...]  # add channel dimension
 
         # Return NumPy arrays (PyTorch DataLoader converts them to tensors automatically)
         return x, tgt, mask, name
