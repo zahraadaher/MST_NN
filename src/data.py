@@ -67,21 +67,22 @@ class MuonDataset(Dataset):
         S_sigma = data["S_sigma"].astype(np.float32) # angular sigma accumulator
 
         # -------- Log transforms --------
+        S_log = np.log1p(S)
         N_log = np.log1p(N)
         S_sigma_log = np.log1p(S_sigma)
 
         # -------- Normalization --------
-        if self.normalize_stats:
-            S           = S           / (self.normalize_stats["S_max"] + 1e-9)
-            N_log       = N_log       / (self.normalize_stats["N_log_max"] + 1e-9)
-            S_sigma_log = S_sigma_log / (self.normalize_stats["S_sigma_log_max"] + 1e-9)
-        else:
-            S           /= (S.max()           + 1e-9)
-            N_log       /= (N_log.max()       + 1e-9)
-            S_sigma_log /= (S_sigma_log.max() + 1e-9)
+        # if self.normalize_stats:
+        #     S           = S           / (self.normalize_stats["S_max"] + 1e-9)
+        #     N_log       = N_log       / (self.normalize_stats["N_log_max"] + 1e-9)
+        #     S_sigma_log = S_sigma_log / (self.normalize_stats["S_sigma_log_max"] + 1e-9)
+        # else:
+        #     S           /= (S.max()           + 1e-9)
+        #     N_log       /= (N_log.max()       + 1e-9)
+        #     S_sigma_log /= (S_sigma_log.max() + 1e-9)
 
         # -------- Input tensor (C, D, D, D) --------
-        x = np.stack([S, N_log, S_sigma_log], axis=0).astype(np.float32)
+        x = np.stack([S_log, N_log, S_sigma_log], axis=0).astype(np.float32)
 
         # -------- Ground truth density volume --------
         tgt_path = os.path.join(self.target_dir, name + "_X0.npy")
