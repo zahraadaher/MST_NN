@@ -21,7 +21,7 @@ class MuonDataset(Dataset):
 
     Returned tensors:
         x     : (3, D, D, D)
-                 channels = [ S_norm , log(1+N)_norm , log(1+S_sigma)_norm ]
+                 channels = [ log(1+S) , log(1+N) , log(1+S_sigma) ]
         tgt   : (1, D, D, D) ground truth density map
         mask  : (1, D, D, D) exposure mask (N > 0)
         name  : str, basename of the sample (without suffix)
@@ -107,10 +107,12 @@ class MuonDataset(Dataset):
         mask = (N > 0).astype(np.float32)#[None, ...]
 
         # additional target threshold mask
-        target_mask = (tgt[0] > 0.1).astype(np.float32)  # tgt[0] because tgt has shape (1,D,D,D)
+        #target_mask = (tgt[0] > 0.1).astype(np.float32)  # tgt[0] because tgt has shape (1,D,D,D)
 
         # Combine masks
-        mask = (mask * target_mask)[None, ...]  # add channel dimension
+        #mask = (mask * target_mask)[None, ...]  # add channel dimension
+
+        mask = mask[None, ...]  # add channel dimension
 
         # Return NumPy arrays (PyTorch DataLoader converts them to tensors automatically)
         return x, tgt, mask, name
