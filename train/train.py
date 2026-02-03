@@ -2,7 +2,10 @@
 import os
 import sys
 import torch
+import random
+import numpy as np
 from torch.utils.data import DataLoader
+import torch.nn.functional as F
 
 use_wandb = False
 
@@ -20,13 +23,23 @@ from visualization.plot_pred import plot_slices
 
 data_path = '/home/ucl/cp3/zdaher/MST_NN/train/datasets_leadInConcrete/'
 out_dir = "train_outputs_lead"
-n_epochs = 100
-save_interval = 2
+n_epochs = 400
+save_interval = 50
+
+def seed_everything(seed=123):
+    random.seed(seed)
+    os.environ['PYTHONHASHSEED'] = str(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed(seed)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = True
 
 
 def train_main():
+    seed_everything(0) # Fixed seed for reproducibility
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    torch.backends.cudnn.benchmark = True
+    #torch.backends.cudnn.benchmark = True
 
     if use_wandb:
         wandb.init(
@@ -50,19 +63,20 @@ def train_main():
         target_dir=f"{data_path}/val/density_maps",
     )
 
-    train_loader = DataLoader(train_dataset, batch_size=4, shuffle=True,
+    train_loader = DataLoader(train_dataset, batch_size=16, shuffle=True,
                               num_workers=4, pin_memory=True)
-    val_loader = DataLoader(val_dataset, batch_size=2, shuffle=False,
+    val_loader = DataLoader(val_dataset, batch_size=8, shuffle=False,
                             num_workers=2, pin_memory=True)
 
     model = ProbUNet3D(
         in_channels=3,
         out_channels=2,
         base_features=16,
-        depth=4
+        depth=3,
+        use_resblock = False
     ).to(device)
 
-    optimizer = torch.optim.AdamW(model.parameters(), lr=1e-3, weight_decay=1e-5)
+    optimizer = torch.optim.AdamW(model.parameters(), lr=6e-3, weight_decay=1e-5)
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
         optimizer, mode="min", factor=0.5, patience=5, verbose=True
     )
@@ -91,7 +105,20 @@ def train_main():
 
             optimizer.zero_grad()
             pred = model(x)
-            loss = nll_loss_masked(pred, y.log(), mask)
+             # --- Warmup: MSE on Density Only ---
+            # For the first 10 epochs, force model to learn the MEAN efficiently.
+            # NLL can be unstable if mean is far off.
+            if epoch <= 10:
+                # pred[:,0] is log(density). y.log() is log(density).
+                # Simple MSE on the log-values.
+                mse_loss = F.mse_loss(pred[:, 0], y.log()[:, 0], reduction='none')
+                loss = (mse_loss * mask[:, 0]).sum() / (mask.sum() + 1e-8)
+            else:
+                loss = nll_loss_masked(pred, y.log(), mask)
+            # loss = nll_loss_masked(pred, y.log(), mask)
+            # pred, kl = model(x, y)
+            # recon = F.mse_loss(pred, y)
+            # loss = recon + kl.mean()
             loss.backward()
             torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
             optimizer.step()
@@ -111,6 +138,10 @@ def train_main():
 
                 pred = model(x)
                 loss = nll_loss_masked(pred, y.log(), mask)
+                #pred, kl = model(x, y)
+                #recon = F.mse_loss(pred, y)
+                #loss = recon
+
                 val_loss += loss.item()
 
         val_loss /= len(val_loader)
