@@ -80,52 +80,18 @@ and predicts 2 output channels:
 - Upsampling via trilinear interpolation (avoids checkerboard artifacts)  
 - Final `Conv3d` outputs 2 channels per voxel
 
-The model implements a Gaussian NLL loss function for probabbilistic regression.
-
----
-
-
-
-## About the Custom PyTorch Wheel
-
-This project is intended to run on a **computing cluster node** where the system libraries
-(GLIBC, CUDA runtime, NVIDIA drivers) are older than what official PyTorch builds expect.
-Installing PyTorch from Conda or pip on these nodes leads to errors such as:
-
-- `ImportError: GLIBC_2.27 not found`
-- missing or incompatible CUDA libraries
-- failure to load `torch._C`
-
-To avoid these issues, this repository provides a **custom PyTorch 2.6.0 wheel**
-that is pre-built to:
-
-- work with the cluster’s older GLIBC version  
-- match the CUDA runtime available on the cluster  
-- avoid dependency conflicts with Conda’s CUDA packages
-
-This wheel is stored via **Git LFS** and is downloaded automatically when cloning the repo
-(after running `git lfs install`).
+The model implements a Gaussian NLL loss function for probabilistic regression.
 
 ---
 
 ## Installation Guide
 
-This project requires **Git LFS**, **Conda**, and the included **custom PyTorch wheel**.
-Follow the steps below depending on your operating system.
-
-### 1. Install Git LFS (required to download the custom PyTorch wheel)
-1. Download Git LFS: https://git-lfs.github.com/
-2. Run the installer.
-3. In terminal, run:
-```bash
-git lfs install
-```
-### 2. Clone the repository
+### 1. Clone the repository
 ```bash
 git clone https://github.com/zahraadaher/MST_NN.git
 cd MST_NN
 ```
-### 3. Create the Conda environement
+### 2. Create the Conda environement
 ```bash
 conda env create -f environment.yml
 conda activate mst
