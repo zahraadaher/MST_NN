@@ -134,6 +134,3 @@ class MuonDataset(Dataset):
 
         # Return NumPy arrays (PyTorch DataLoader converts them to tensors automatically)
         return x, tgt, mask, name
-
-
-n
