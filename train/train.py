@@ -72,13 +72,14 @@ def train_one_epoch(model, loader, optimizer, device, epoch):
             mse = F.mse_loss(pred_cropped[:, 0], y.log()[:, 0], reduction="none")
             loss = (mse * mask[:, 0]).sum() / (mask.sum() + 1e-8)
         else:
-            loss = nll_loss_masked(pred_cropped, y, mask)
+            loss = nll_loss_masked(pred_cropped, y, mask)[0]
+            loss_monitor = nll_loss_masked(pred_cropped, y, mask)[1]
 
         loss.backward()
-        torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
+        #torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
         optimizer.step()
 
-        total_loss += loss.item()
+        total_loss += loss_monitor.item()
 
     return total_loss / len(loader)
 
@@ -92,7 +93,7 @@ def validate(model, loader, device):
             pred = model(x)
             pred= center_crop(pred, y)
             mask = center_crop(mask, y)
-            loss = nll_loss_masked(pred, y, mask)
+            loss = nll_loss_masked(pred, y, mask)[1]
             total_loss += loss.item()
 
     return total_loss / len(loader)
