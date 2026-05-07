@@ -1,4 +1,5 @@
 import os
+import re
 import glob
 import numpy as np
 import torch
@@ -40,7 +41,7 @@ class MuonDataset(Dataset):
     """
 
     def __init__(self, poca_dir: str, target_dir: str, normalize_stats=None):
-        self.files = sorted(glob.glob(os.path.join(poca_dir, "*_poca_voxels.npz")))
+        self.files = sorted(glob.glob(os.path.join(poca_dir, "*.npz")))
         if len(self.files) == 0:
             raise RuntimeError(f"No precomputed PoCA files found in {poca_dir}")
 
@@ -56,10 +57,37 @@ class MuonDataset(Dataset):
     def __len__(self):
         return len(self.files)
 
+    def load_array(self, path: str) -> np.ndarray:
+        ext = os.path.splitext(path)[1].lower()
+        
+        if ext == ".npz":
+            with np.load(path) as f:
+                # grab the first array in the archive
+                arr = f[f.files[0]].astype(np.float32)
+        else:
+            # assume .npy or other single-array file
+            arr = np.load(path).astype(np.float32)
+        
+        return arr
+
     def __getitem__(self, idx):
         # -------- Load precomputed PoCA voxel grids --------
         path = self.files[idx]
-        name = os.path.basename(path).replace("_poca_voxels.npz", "")
+        base = os.path.basename(path)
+        # If ends with "_poca_voxels.npz", strip it
+        if base.endswith("_poca_voxels.npz"):
+            name = base.replace("_poca_voxels.npz", "")
+            tgt_path = os.path.join(self.target_dir, name + "_X0.npy")
+            
+        # If matches "_T*_aug*.npz", strip that pattern
+        match = re.search(r"(.*)_T.*_aug.*\.npz$", base)
+        if match:
+            name = match.group(1)
+            tgt_path = os.path.join(self.target_dir, name + "_X0.npz")
+
+        if not os.path.exists(tgt_path):
+            raise RuntimeError(f"Ground truth not found: {tgt_path}")
+                
         data = np.load(path)
 
         S       = data["S"].astype(np.float32)       # scattering density
@@ -70,6 +98,7 @@ class MuonDataset(Dataset):
         S_log = np.log1p(S)
         N_log = np.log1p(N)
         S_sigma_log = np.log1p(S_sigma)
+
 
         # -------- Normalization --------
         # if self.normalize_stats:
@@ -82,14 +111,9 @@ class MuonDataset(Dataset):
         #     S_sigma_log /= (S_sigma_log.max() + 1e-9)
 
         # -------- Input tensor (C, D, D, D) --------
-        x = np.stack([S_log, N_log, S_sigma_log], axis=0).astype(np.float32)
+        x = np.stack([S_log, N_log], axis=0).astype(np.float32)
 
-        # -------- Ground truth density volume --------
-        tgt_path = os.path.join(self.target_dir, name + "_X0.npy")
-        if not os.path.exists(tgt_path):
-            raise RuntimeError(f"Ground truth not found: {tgt_path}")
-
-        tgt = np.load(tgt_path).astype(np.float32)
+        tgt = self.load_array(tgt_path)
         
         # Avoid division by 0 in void
         eps = 1e-9
@@ -104,13 +128,7 @@ class MuonDataset(Dataset):
         tgt = tgt[None, ...]  # add channel dimension: (1, D, D, D)
 
         # -------- Exposure mask (1, D, D, D) --------
-        mask = (N > 0).astype(np.float32)#[None, ...]
-
-        # additional target threshold mask
-        #target_mask = (tgt[0] > 0.1).astype(np.float32)  # tgt[0] because tgt has shape (1,D,D,D)
-
-        # Combine masks
-        #mask = (mask * target_mask)[None, ...]  # add channel dimension
+        mask = (N > 0).astype(np.float32) #[None, ...]
 
         mask = mask[None, ...]  # add channel dimension
 
