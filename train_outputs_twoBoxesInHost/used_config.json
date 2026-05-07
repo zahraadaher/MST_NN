@@ -1,0 +1,21 @@
+{
+    "data_path": "/nfs/user/zdaher/twoBoxesInHost/dataset_vox05",
+    "out_dir": "train_outputs_twoBoxesInHost",
+    "n_epochs": 400,
+    "batch_size_train": 64,
+    "batch_size_val": 16,
+    "lr": 0.01,
+    "weight_decay": 0.001,
+    "patience": 5,
+    "factor": 0.3,
+    "early_stop_patience": 40,
+    "save_interval": 50,
+    "in_channels": 2,
+    "out_channels": 2,
+    "base_features": 16,
+    "depth": 3,
+    "use_resblock": true,
+    "num_workers_train": 4,
+    "num_workers_val": 2,
+    "seed": 0
+}
