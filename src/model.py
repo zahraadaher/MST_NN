@@ -1,7 +1,9 @@
 import math
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import logging
 
 class ResBlock(nn.Module):
     """
@@ -91,7 +93,11 @@ class ProbUNet3D(nn.Module):
         # Lead (0.0056 m) -> log(178) ~ 5.2
         # Concrete (0.1 m) -> log(10) ~ 2.3
     
-        nn.init.constant_(self.final_conv.bias, -2.0) # -2.0 worked 
+        #nn.init.constant_(self.final_conv.bias[0], 1.7) # -2.0 worked 
+        with torch.no_grad():
+            # Set the 'mean' head bias to 1.7 (the average of 0.1, 1.8, 3.2 targets)
+            self.final_conv.bias[0] = 1.7
+            self.final_conv.bias[1] = -0.3 
 
     def _make_block(self, in_c, out_c):
         if self.use_resblock:
@@ -148,14 +154,14 @@ class ProbUNet3D(nn.Module):
             # 4. Conv Block
             out = up_modules["conv"](out)
             
-        logits = self.final_conv(out)
+        preds = self.final_conv(out)
         
-        predicted_log_density = logits[:, 0:1]
-        predicted_log_sigma   = logits[:, 1:2]
+        predicted_density = preds[:, 0:1]
+        predicted_log_sigma2   = preds[:, 1:2]
         
-        return torch.cat([predicted_log_density, predicted_log_sigma], dim=1)
+        return torch.cat([predicted_density, predicted_log_sigma2], dim=1)
 
-def nll_loss_masked(pred, target, mask, sigma_prior_strength=1e-4):
+def nll_loss_masked(pred, target, mask, sigma_prior_strength=1e-2):
     """
     pred:   (B,2,D,D,D) -> [mu, log_sigma]
     target: (B,1,D,D,D)
@@ -163,33 +169,47 @@ def nll_loss_masked(pred, target, mask, sigma_prior_strength=1e-4):
     We assume Y|X ~ N(mu, sigma^2) and maximize log-likelihood
     (i.e. minimize negative log-likelihood).
     """
-    mu        = pred[:, 0:1]
-    log_sigma = pred[:, 1:2]
+    mu        =pred[:, 0:1]
+    log_sigma_2 = pred[:, 1:2]
 
     # clamp log_sigma to avoid numerical blow-up
-    log_sigma = torch.clamp(log_sigma, -10.0, 5.0)
-    sigma     = torch.exp(log_sigma)
+    #log_sigma_2 = torch.clamp(log_sigma_2, -10.0, 2.0)
+    sigma_2     = torch.exp(log_sigma_2)
+
+    MATERIAL_MEANS = {"Al": 0.112, "Pb": 1.786, "U": 3.226}
+    TRUTH_MEAN = 1.7
+    TRUTH_STD  = 1.3
+    
+    # in training loop, before loss:
+    #target = (target - TRUTH_MEAN) / TRUTH_STD  # now all materials ~ [-1, 1.5]
 
 
     diff = target - mu
 
     # per-voxel Gaussian NLL
-    nll = 0.5 * torch.log(2 * math.pi * sigma**2) + 0.5 * (diff**2) / (sigma**2)
+    nll = 0.5 * np.log(2 * math.pi) + 0.5 * log_sigma_2 + 0.5 * diff**2  * torch.exp(-log_sigma_2)
+
+    # weight target voxels 
+    weight = torch.where(target > 0.1, 10.0, 0.0)
+
+    scale = sigma_2.detach()  ** 0.5
 
     # apply exposure mask
-    masked_nll = nll * mask
-    n_masked   = mask.sum()
+    masked_nll = nll * mask * weight * scale
+    monitor_loss =  nll * mask * weight 
+    n_masked   = (weight*mask).sum()
     
     # Avoid division by 0 if mask is empty
     if n_masked == 0:
         base_loss = torch.tensor(0.0, device=pred.device, requires_grad=True)
     else:
         base_loss = masked_nll.sum() / n_masked
+        monitor_loss = monitor_loss.sum() / n_masked
 
     # optional weak prior: penalize too-large sigma
     # encourages log_sigma ~ 0 (i.e. sigma ~ 1 in normalized units)
-    sigma_prior = sigma_prior_strength * (sigma**2).mean()
+    sigma_prior = sigma_prior_strength * (sigma_2).mean()
 
-    return base_loss + sigma_prior
+    return base_loss, monitor_loss# + sigma_prior
 
 
