@@ -3,13 +3,13 @@
   "out_dir": "train_outputs_twoBoxesInHost",
 
   "n_epochs": 400,
-  "batch_size_train": 32,
+  "batch_size_train": 64,
   "batch_size_val": 16,
   "lr": 0.01,
-  "weight_decay": 1e-5,
-  "patience": 3,
+  "weight_decay": 1e-3,
+  "patience": 5,
   "factor": 0.3,
-  "early_stop_patience": 10,
+  "early_stop_patience": 40,
   "save_interval": 50,
 
   "in_channels": 2,
