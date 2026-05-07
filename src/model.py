@@ -3,7 +3,6 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import logging
 
 class ResBlock(nn.Module):
     """
@@ -89,10 +88,6 @@ class ProbUNet3D(nn.Module):
 
         self.final_conv = nn.Conv3d(base_features, out_channels, 1)
         
-        # Initialize bias
-        # Lead (0.0056 m) -> log(178) ~ 5.2
-        # Concrete (0.1 m) -> log(10) ~ 2.3
-    
         #nn.init.constant_(self.final_conv.bias[0], 1.7) # -2.0 worked 
         with torch.no_grad():
             # Set the 'mean' head bias to 1.7 (the average of 0.1, 1.8, 3.2 targets)
@@ -161,7 +156,7 @@ class ProbUNet3D(nn.Module):
         
         return torch.cat([predicted_density, predicted_log_sigma2], dim=1)
 
-def nll_loss_masked(pred, target, mask, sigma_prior_strength=1e-2):
+def nll_loss_masked(pred, target, mask):
     """
     pred:   (B,2,D,D,D) -> [mu, log_sigma]
     target: (B,1,D,D,D)
@@ -172,17 +167,7 @@ def nll_loss_masked(pred, target, mask, sigma_prior_strength=1e-2):
     mu        =pred[:, 0:1]
     log_sigma_2 = pred[:, 1:2]
 
-    # clamp log_sigma to avoid numerical blow-up
-    #log_sigma_2 = torch.clamp(log_sigma_2, -10.0, 2.0)
     sigma_2     = torch.exp(log_sigma_2)
-
-    MATERIAL_MEANS = {"Al": 0.112, "Pb": 1.786, "U": 3.226}
-    TRUTH_MEAN = 1.7
-    TRUTH_STD  = 1.3
-    
-    # in training loop, before loss:
-    #target = (target - TRUTH_MEAN) / TRUTH_STD  # now all materials ~ [-1, 1.5]
-
 
     diff = target - mu
 
@@ -192,6 +177,7 @@ def nll_loss_masked(pred, target, mask, sigma_prior_strength=1e-2):
     # weight target voxels 
     weight = torch.where(target > 0.1, 10.0, 0.0)
 
+    # beta-variance scale
     scale = sigma_2.detach()  ** 0.5
 
     # apply exposure mask
@@ -206,10 +192,6 @@ def nll_loss_masked(pred, target, mask, sigma_prior_strength=1e-2):
         base_loss = masked_nll.sum() / n_masked
         monitor_loss = monitor_loss.sum() / n_masked
 
-    # optional weak prior: penalize too-large sigma
-    # encourages log_sigma ~ 0 (i.e. sigma ~ 1 in normalized units)
-    sigma_prior = sigma_prior_strength * (sigma_2).mean()
-
-    return base_loss, monitor_loss# + sigma_prior
+    return base_loss, monitor_loss
 
 
